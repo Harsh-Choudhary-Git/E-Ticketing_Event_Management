@@ -1,0 +1,231 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #14213d;
+  background: #f4f7fb;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.app-shell {
+  min-height: 100vh;
+}
+.topbar {
+  background: #14213d;
+  color: white;
+  padding: 24px 5%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.content {
+  max-width: 1280px;
+  margin: auto;
+  padding: 36px 5%;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: #ef8354;
+  margin: 0 0 8px;
+}
+.topbar h1,
+.login h1 {
+  margin: 0;
+}
+.toolbar,
+.ticket-toolbar,
+.top-actions,
+.event-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 20px 0 32px;
+}
+.event-card,
+.stat,
+.detail,
+.login-card {
+  background: white;
+  border: 1px solid #dde4ef;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px #172b4d0b;
+}
+.event-card {
+  text-align: left;
+  padding: 20px;
+  cursor: pointer;
+  color: inherit;
+}
+.event-card.selected {
+  border: 2px solid #ef8354;
+}
+.event-card h3 {
+  margin: 8px 0;
+}
+.event-date,
+.muted,
+small {
+  color: #6c7890;
+}
+.detail {
+  padding: 24px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 22px 0;
+}
+.stat {
+  padding: 18px;
+}
+.stat span,
+.stat strong {
+  display: block;
+}
+.stat span {
+  color: #6c7890;
+  font-size: 13px;
+}
+.stat strong {
+  font-size: 28px;
+  margin-top: 8px;
+}
+.table-wrap {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  text-align: left;
+  padding: 14px 10px;
+  border-bottom: 1px solid #e7ebf2;
+}
+td small {
+  display: block;
+  margin-top: 4px;
+}
+.status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.status-active,
+.status-issued,
+.status-sent {
+  background: #e7f7ef;
+  color: #137a4c;
+}
+.status-cancelled {
+  background: #fff0f0;
+  color: #b42318;
+}
+.status-checked_in {
+  background: #e9f0ff;
+  color: #2b59c3;
+}
+.status-checked_in {
+  white-space: nowrap;
+}
+.mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+button {
+  border: 0;
+  border-radius: 10px;
+  background: #ef8354;
+  color: white;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ghost {
+  background: #eef2f7;
+  color: #243654;
+}
+.small {
+  padding: 7px 9px;
+  font-size: 12px;
+  margin-right: 5px;
+}
+input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 11px;
+  background: white;
+  font: inherit;
+}
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 14px 0;
+}
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.login-card {
+  width: min(420px, 100%);
+  padding: 34px;
+}
+.error {
+  background: #fff0f0;
+  color: #a51c30;
+  border-radius: 9px;
+  padding: 11px;
+  margin: 14px 0;
+  font-size: 13px;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #14213d80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal {
+  background: white;
+  padding: 26px;
+  border-radius: 16px;
+  width: min(520px, 100%);
+}
+@media (max-width: 700px) {
+  .topbar {
+    align-items: flex-start;
+    gap: 20px;
+    flex-direction: column;
+  }
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ticket-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
