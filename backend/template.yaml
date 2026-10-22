@@ -20,6 +20,14 @@ Parameters:
     Type: String
     Default: 'http://localhost:5174'
     Description: Base URL of the frontend app used in ticket emails (e.g. https://your-frontend-domain.com)
+  RazorpayKeyId:
+    Type: String
+    Default: ''
+    Description: Razorpay Public Key ID
+  RazorpayKeySecret:
+    Type: String
+    Default: ''
+    Description: Razorpay Secret Key
 
 Globals:
   Function:
@@ -33,11 +41,14 @@ Globals:
         EVENTS_TABLE: !Ref EventsTable
         TICKETS_TABLE: !Ref TicketsTable
         VERIFICATION_CODES_TABLE: !Ref VerificationCodesTable
+        PAYMENTS_TABLE: !Ref PaymentsTable
         JWT_SECRET_ARN: !Ref JwtSecret
         SENDER_EMAIL: !Ref SenderEmail
         ADMIN_REGISTRATION_SECRET: !Ref AdminRegistrationSecret
         ALLOWED_ORIGIN: !Ref AllowedOrigin
         FRONTEND_BASE_URL: !Ref FrontendBaseUrl
+        RAZORPAY_KEY_ID: !Ref RazorpayKeyId
+        RAZORPAY_KEY_SECRET: !Ref RazorpayKeySecret
 
 Resources:
 
@@ -144,6 +155,48 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: expiresAt
         Enabled: true
+
+  PaymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+        - AttributeName: eventId
+          AttributeType: S
+        - AttributeName: adminId
+          AttributeType: S
+        - AttributeName: paymentId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EventIndex
+          KeySchema:
+            - AttributeName: eventId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: AdminIndex
+          KeySchema:
+            - AttributeName: adminId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: PaymentIdIndex
+          KeySchema:
+            - AttributeName: paymentId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
   # --- Admin Authentication Functions ---
 
@@ -462,6 +515,8 @@ Resources:
             TableName: !Ref EventsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TicketsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PaymentsTable
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
@@ -575,6 +630,8 @@ Resources:
             TableName: !Ref TicketsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref VerificationCodesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PaymentsTable
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
@@ -585,6 +642,149 @@ Resources:
           Properties:
             RestApiId: !Ref TicketApi
             Path: /public/tickets/{ticketId}/cancel/verify-code
+            Method: post
+
+  UpdateEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/updateEvent.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /events/{eventId}
+            Method: put
+        ApiAdmin:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /admin/events/{eventId}
+            Method: put
+
+  CreatePaymentOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/createPaymentOrder.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PaymentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VerificationCodesTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /public/payments/create-order
+            Method: post
+
+  VerifyPaymentAndBookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/verifyPaymentAndBook.handler
+      Timeout: 15
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TicketsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PaymentsTable
+        - Statement:
+            - Effect: Allow
+              Action: ses:SendRawEmail
+              Resource: '*'
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /public/payments/verify
+            Method: post
+
+  GetAdminAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/getAdminAnalytics.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref TicketsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PaymentsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /admin/analytics
+            Method: get
+
+  ListAdminPaymentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/listAdminPayments.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PaymentsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /admin/payments
+            Method: get
+
+  RefundPaymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/refundPayment.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TicketsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PaymentsTable
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref JwtSecret
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TicketApi
+            Path: /admin/payments/{paymentId}/refund
             Method: post
 
   # --- Preserved API Key & Usage Plan Resources ---

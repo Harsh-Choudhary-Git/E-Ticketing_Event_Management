@@ -14,6 +14,7 @@ const ADMINS_TABLE = process.env.ADMINS_TABLE;
 const EVENTS_TABLE = process.env.EVENTS_TABLE;
 const TICKETS_TABLE = process.env.TICKETS_TABLE;
 const VERIFICATION_CODES_TABLE = process.env.VERIFICATION_CODES_TABLE;
+const PAYMENTS_TABLE = process.env.PAYMENTS_TABLE || 'PaymentsTable';
 
 // --- Admin Operations ---
 
@@ -94,7 +95,18 @@ async function listPublicEvents() {
     ticketsIssued: ev.ticketsIssued ?? 0,
     status: ev.status,
     createdAt: ev.createdAt,
+    isPaid: Boolean(ev.isPaid),
+    price: ev.price ?? 0,
+    currency: ev.currency || 'INR',
+    salesStart: ev.salesStart || null,
+    salesEnd: ev.salesEnd || null,
+    maxTicketsPerUser: ev.maxTicketsPerUser ?? 1,
   }));
+}
+
+async function updateEvent(event) {
+  await ddb.send(new PutCommand({ TableName: EVENTS_TABLE, Item: event }));
+  return event;
 }
 
 // Atomic capacity check and reservation:
@@ -329,23 +341,135 @@ async function findRecentChallenge({ email, purpose, cooldownSeconds }) {
   return Items && Items.length > 0 ? Items[0] : null;
 }
 
+// --- Payment & Transaction Operations ---
+
+async function putPayment(payment) {
+  const item = { ...payment };
+  // DynamoDB GSI PaymentIdIndex requires type String (S); null values cause validation errors
+  if (!item.paymentId) delete item.paymentId;
+  await ddb.send(new PutCommand({ TableName: PAYMENTS_TABLE, Item: item }));
+  return payment;
+}
+
+async function getPayment(orderId) {
+  const { Item } = await ddb.send(new GetCommand({ TableName: PAYMENTS_TABLE, Key: { orderId } }));
+  return Item || null;
+}
+
+async function getPaymentByPaymentId(paymentId) {
+  const { Items } = await ddb.send(
+    new QueryCommand({
+      TableName: PAYMENTS_TABLE,
+      IndexName: 'PaymentIdIndex',
+      KeyConditionExpression: 'paymentId = :paymentId',
+      ExpressionAttributeValues: { ':paymentId': paymentId },
+    })
+  );
+  return Items && Items.length > 0 ? Items[0] : null;
+}
+
+async function listPaymentsByEvent(eventId) {
+  const { Items } = await ddb.send(
+    new QueryCommand({
+      TableName: PAYMENTS_TABLE,
+      IndexName: 'EventIndex',
+      KeyConditionExpression: 'eventId = :eventId',
+      ExpressionAttributeValues: { ':eventId': eventId },
+    })
+  );
+  return Items || [];
+}
+
+async function listPaymentsByAdmin(adminId) {
+  const { Items } = await ddb.send(
+    new QueryCommand({
+      TableName: PAYMENTS_TABLE,
+      IndexName: 'AdminIndex',
+      KeyConditionExpression: 'adminId = :adminId',
+      ExpressionAttributeValues: { ':adminId': adminId },
+    })
+  );
+  return Items || [];
+}
+
+async function updatePayment(orderId, updateFields) {
+  const sanitized = { ...updateFields };
+  if ('paymentId' in sanitized && !sanitized.paymentId) {
+    delete sanitized.paymentId;
+  }
+  const keys = Object.keys(sanitized);
+  if (keys.length === 0) return;
+  const updateExprParts = [];
+  const exprAttrNames = {};
+  const exprAttrValues = {};
+
+  keys.forEach((key, idx) => {
+    updateExprParts.push(`#k${idx} = :v${idx}`);
+    exprAttrNames[`#k${idx}`] = key;
+    exprAttrValues[`:v${idx}`] = sanitized[key];
+  });
+
+  await ddb.send(
+    new UpdateCommand({
+      TableName: PAYMENTS_TABLE,
+      Key: { orderId },
+      UpdateExpression: `SET ${updateExprParts.join(', ')}`,
+      ExpressionAttributeNames: exprAttrNames,
+      ExpressionAttributeValues: exprAttrValues,
+    })
+  );
+}
+
+async function updateTicket(ticketId, updateFields) {
+  const keys = Object.keys(updateFields);
+  if (keys.length === 0) return;
+  const updateExprParts = [];
+  const exprAttrNames = {};
+  const exprAttrValues = {};
+
+  keys.forEach((key, idx) => {
+    updateExprParts.push(`#k${idx} = :v${idx}`);
+    exprAttrNames[`#k${idx}`] = key;
+    exprAttrValues[`:v${idx}`] = updateFields[key];
+  });
+
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TICKETS_TABLE,
+      Key: { ticketId },
+      UpdateExpression: `SET ${updateExprParts.join(', ')}`,
+      ExpressionAttributeNames: exprAttrNames,
+      ExpressionAttributeValues: exprAttrValues,
+    })
+  );
+}
+
 module.exports = {
   putAdmin,
   getAdminById,
   getAdminByEmail,
   countAdmins,
   putEvent,
+  updateEvent,
   getEvent,
   listEventsByAdmin,
   listPublicEvents,
   reserveTicketCapacity,
   releaseTicketCapacity,
   putTicket,
+  updateTicket,
   getTicket,
   listTicketsByEvent,
   markTicketSent,
   checkInTicket,
   cancelTicket,
+  // Payment operations
+  putPayment,
+  getPayment,
+  getPaymentByPaymentId,
+  listPaymentsByEvent,
+  listPaymentsByAdmin,
+  updatePayment,
   // OTP challenge operations
   putVerificationChallenge,
   getVerificationChallenge,
